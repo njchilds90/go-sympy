@@ -2,9 +2,9 @@
 
 A minimal symbolic mathematics library for Go, inspired by Python's SymPy.
 
-Supports symbolic expressions, arithmetic (+ − × / ^ negation), trig/exp/log/sqrt functions, precedence-aware pretty-printing, differentiation (product/chain/general power rule), basic simplification, string parsing, numerical evaluation, simple expansion, basic integration, and linear/quadratic equation solving.
+Single-file, zero dependencies. Supports symbolic expressions, arithmetic, trig/exp/log/sqrt functions, pretty-printing, differentiation (general rules), basic simplification, string parsing, numerical evaluation, simple expansion, basic integration, and linear/quadratic solving.
 
-Single-file, zero dependencies. Very early prototype (all development on Feb 18, 2026).
+**Early prototype** — all development on Feb 18, 2026.
 
 ## Installation
 
