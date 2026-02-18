@@ -92,6 +92,8 @@ func (b *binOp) Simplify() Expr {
 		if rc.value == 0 && b.op == "*" { return Number(0) }
 	}
 	if b.op == "+" && isTrigId(l, r) { return Number(1) }
+	if b.op == "-" && l.String() == r.String() { return Number(0) }
+	if b.op == "/" && l.String() == r.String() { return Number(1) }
 	return &binOp{b.op, l, r, b.prec}
 }
 
@@ -240,10 +242,10 @@ func Integrate(e Expr, sym Expr) Expr {
 	return nil
 }
 
-func IntegrateDefinite(e Expr, sym Expr, lower, upper float64) float64 {
+func IntegrateDefinite(e Expr, sym Expr, a, b float64) float64 {
 	intg := Integrate(e, sym)
 	if intg == nil { return math.NaN() }
-	return intg.Eval(map[string]float64{sym.(*varExpr).name: upper}) - intg.Eval(map[string]float64{sym.(*varExpr).name: lower})
+	return intg.Eval(map[string]float64{sym.(*varExpr).name: b}) - intg.Eval(map[string]float64{sym.(*varExpr).name: a})
 }
 
 func Solve(e Expr, sym Expr) []Expr {
@@ -251,11 +253,13 @@ func Solve(e Expr, sym Expr) []Expr {
 	degree := deg(e, v)
 	if degree == 1 { return []Expr{ solveLinear(e, v) } }
 	if degree == 2 { return solveQuadratic(e, v) }
-	// higher degree stub: try rational roots
-	possibleRoots := []float64{1, -1, 2, -2} // stub
+	// higher degree stub: rational root theorem
+	possibleRoots := []float64{1, -1, 2, -2, 3, -3, 0.5, -0.5} // expand for robustness
 	for _, root := range possibleRoots {
 		if e.Eval(map[string]float64{v.name: root}) == 0 {
-			return append([]Expr{Number(root)}, Solve(polyDiv(e, Sub(sym, Number(root)), v), sym)...)
+			factor := Sub(sym, Number(root))
+			quot := polyDiv(e, factor, v)
+			return append([]Expr{Number(root)}, Solve(quot, sym)...)
 		}
 	}
 	return nil
@@ -319,14 +323,8 @@ func polyCoeffs(e Expr, v *varExpr) (a, b, c float64) {
 func deg(e Expr, v *varExpr) int {
 	switch ex := e.(type) {
 	case *binOp:
-		if ex.op == "+" || ex.op == "-" || ex.op == "*" {
-			return max(deg(ex.l, v), deg(ex.r, v))
-		}
-		if ex.op == "^" {
-			if vv, ok := ex.l.(*varExpr); ok && vv.name == v.name {
-				if p, ok := ex.r.(*constExpr); ok { return int(p.value) }
-			}
-		}
+		if ex.op == "+" || ex.op == "-" { return max(deg(ex.l, v), deg(ex.r, v)) }
+		if ex.op == "*" { return deg(ex.l, v) + deg(ex.r, v) }
 	case *varExpr: return 1
 	}
 	return 0
@@ -334,7 +332,10 @@ func deg(e Expr, v *varExpr) int {
 
 func max(a, b int) int { if a > b { return a }; return b }
 
-func polyDiv(e, factor Expr, v *varExpr) Expr { return e } // stub
+func polyDiv(e, factor Expr, v *varExpr) Expr {
+	// synthetic division stub for conciseness
+	return e // placeholder, full impl would use coeff list
+}
 
 func Taylor(f, x, point Expr, n int) Expr {
 	res := f.Simplify()
@@ -349,16 +350,6 @@ func Taylor(f, x, point Expr, n int) Expr {
 	return res
 }
 
-func (e *constExpr) Subst(_, _ Expr) Expr { return e }
-func (e *varExpr) Subst(v, sub Expr) Expr { if e.name == v.(*varExpr).name { return sub }; return e }
-func (e *binOp) Subst(v, sub Expr) Expr { return &binOp{e.op, e.l.Subst(v, sub), e.r.Subst(v, sub), e.prec} }
-func (e *unary) Subst(v, sub Expr) Expr { return &unary{e.op, e.e.Subst(v, sub)} }
-func (e *fexpr) Subst(v, sub Expr) Expr { return &fexpr{e.name, e.arg.Subst(v, sub)} }
-
-func Limit(f, x, a Expr) Expr {
-	return f.Subst(x, a).Simplify()
-}
-
 type Matrix [][]Expr
 func (m Matrix) String() string {
 	rows := []string{}
@@ -370,12 +361,6 @@ func (m Matrix) String() string {
 	return "[" + strings.Join(rows, "; ") + "]"
 }
 func (m Matrix) LaTeX() string { return m.String() } // stub
-func (m Matrix) Eval(_ map[string]float64) float64 { return math.NaN() }
-func (m Matrix) Diff(_ Expr) Expr { return Number(0) }
-func (m Matrix) Simplify() Expr {
-	for i := range m { for j := range m[i] { m[i][j] = m[i][j].Simplify() } }
-	return m
-}
 func MatrixAdd(a, b Matrix) Matrix {
 	res := make(Matrix, len(a))
 	for i := range a {
@@ -397,10 +382,7 @@ func MatrixMul(a, b Matrix) Matrix {
 	return res
 }
 
-func SolveSystem(eqs []Expr, vars []Expr) []Expr {
-	// stub: assume square linear system, use Gaussian elimination or something, but minimal
-	return []Expr{}
-}
+func Limit(f, x, a Expr) Expr { return f.Subst(x, a).Simplify() }
 
 func Parse(s string) Expr {
 	s = strings.ReplaceAll(s, " ", "")
