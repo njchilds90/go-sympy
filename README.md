@@ -1,217 +1,474 @@
 # go-sympy
 
-Minimal deterministic symbolic math kernel in pure Go.
+[![Go Reference](https://pkg.go.dev/badge/github.com/njchilds90/go-sympy.svg)](https://pkg.go.dev/github.com/njchilds90/go-sympy)
+[![Tests](https://github.com/njchilds90/go-sympy/actions/workflows/ci.yml/badge.svg)](https://github.com/njchilds90/go-sympy/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Single-file. No dependencies. Rational arithmetic. AI-friendly.
+**Minimal deterministic symbolic math kernel in pure Go.**
+
+Single file. Zero dependencies. Exact rational arithmetic. AI-agent ready.
 
 ---
 
-## Why
+## Why go-sympy?
 
-Python has SymPy.
+Python has SymPy. Go has... mostly numeric math.
 
-Go has… mostly numeric math.
+`go-sympy` fills the gap with a compact symbolic core purpose-built for:
 
-`go-sympy` is a compact symbolic core designed for:
-
-- AI agents embedding math reasoning
-- Lightweight symbolic manipulation
-- Deterministic algebraic transforms
+- AI agents and LLM tool backends that need exact symbolic reasoning
+- Go microservices performing algebraic transforms
 - Educational tooling
-- LLM tool backends
-- Minimal math kernels in Go services
+- Deterministic, reproducible symbolic computation
+- MCP (Model Context Protocol) math tool servers
 
-This is **not** a full SymPy clone.
+This is **not** a full SymPy port. It is a small, predictable, embeddable symbolic engine.
 
-It is a small, predictable symbolic engine.
+---
+
+## Installation
+
+```bash
+go get github.com/njchilds90/go-sympy
+```
+
+---
+
+## Quick Start
+
+```go
+import gosympy "github.com/njchilds90/go-sympy"
+
+x := gosympy.S("x")
+
+// Build expressions
+expr := gosympy.AddOf(gosympy.MulOf(gosympy.N(3), gosympy.PowOf(x, gosympy.N(2))), gosympy.N(1))
+
+fmt.Println(gosympy.String(expr))  // 3*x^2 + 1
+fmt.Println(gosympy.LaTeX(expr))   // 3 x^{2} + 1
+
+// Differentiate
+d := gosympy.Diff(expr, "x")
+fmt.Println(gosympy.String(d))     // 6*x
+
+// Integrate
+integral, ok := gosympy.Integrate(x, "x")
+fmt.Println(gosympy.String(integral)) // 1/2*x^2
+
+// Solve
+res := gosympy.SolveLinear(gosympy.N(2), gosympy.N(-6))
+fmt.Println(gosympy.String(res.Solutions[0])) // 3
+
+// Substitute
+v := gosympy.Sub(expr, "x", gosympy.N(2))
+fmt.Println(gosympy.String(v))     // 13
+```
 
 ---
 
 ## Design Goals
 
-- Single file (`sympy.go`)
-- Zero external dependencies
-- Deterministic simplification (stable term ordering)
-- Exact rational arithmetic (`math/big.Rat`)
-- AI-embeddable
-- Rule-based and transparent
-- Compact API surface
+| Goal | Status |
+|------|--------|
+| Single file (`sympy.go`) | ✅ |
+| Zero external dependencies | ✅ |
+| Deterministic simplification | ✅ |
+| Exact rational arithmetic | ✅ (`math/big.Rat`) |
+| AI / MCP embeddable | ✅ |
+| JSON serialization round-trip | ✅ |
+| LaTeX output | ✅ |
 
 ---
 
-## Features
+## Expression Types
 
-### Core Expression Types
-
-- `Num` (exact rational numbers)
-- `Sym` (symbols)
-- `Add`
-- `Mul`
-- `Pow`
-
-All implement:
+Every expression implements the `Expr` interface:
 
 ```go
 type Expr interface {
     Simplify() Expr
     String() string
+    LaTeX() string
     Sub(varName string, value Expr) Expr
+    Diff(varName string) Expr
+    Eval() (*Num, bool)
+    Equal(other Expr) bool
 }
 ```
 
----
-
-### Deterministic Simplification
-
-- Flattens nested operations
-- Combines numeric terms
-- Stable lexicographic ordering
-- Reproducible output for AI systems
+### `Num` — Exact rational numbers
 
 ```go
-sympy.String(
-    sympy.AddOf(sympy.S("x"), sympy.N(2), sympy.S("x")),
+gosympy.N(42)       // integer 42
+gosympy.F(1, 3)     // exact fraction 1/3
+gosympy.NFloat(3.14) // float approximation (use sparingly)
+```
+
+### `Sym` — Symbolic variables
+
+```go
+x := gosympy.S("x")
+y := gosympy.S("y")
+alpha := gosympy.S("alpha")  // any string name
+```
+
+### `Add` — Sums
+
+```go
+gosympy.AddOf(x, gosympy.N(1))      // x + 1
+gosympy.AddOf(x, x, gosympy.N(2))   // 2*x + 2 (like terms combined)
+```
+
+### `Mul` — Products
+
+```go
+gosympy.MulOf(gosympy.N(3), x)      // 3*x
+gosympy.MulOf(x, y)                 // x*y
+```
+
+### `Pow` — Powers
+
+```go
+gosympy.PowOf(x, gosympy.N(2))      // x^2
+gosympy.PowOf(x, gosympy.F(1, 2))   // x^(1/2)  (sqrt)
+gosympy.SqrtOf(x)                   // x^(1/2)
+```
+
+### `Func` — Named functions
+
+```go
+gosympy.SinOf(x)    // sin(x)
+gosympy.CosOf(x)    // cos(x)
+gosympy.TanOf(x)    // tan(x)
+gosympy.ExpOf(x)    // exp(x)
+gosympy.LnOf(x)     // ln(x)
+gosympy.AbsOf(x)    // |x|
+gosympy.SqrtOf(x)   // sqrt(x)
+```
+
+---
+
+## Calculus
+
+### Differentiation
+
+```go
+// First derivative
+d := gosympy.Diff(expr, "x")
+
+// Second derivative
+d2 := gosympy.Diff2(expr, "x")
+
+// nth derivative
+dn := gosympy.DiffN(expr, "x", 4)
+```
+
+Supported rules:
+- **Power rule**: d/dx(xⁿ) = n·xⁿ⁻¹
+- **Sum rule**: d/dx(f+g) = f' + g'
+- **Product rule**: d/dx(f·g) = f'g + fg'
+- **Chain rule**: d/dx(f(g(x))) = f'(g(x))·g'(x)
+- **Trig**: sin, cos, tan
+- **Exponential/log**: exp, ln
+
+### Integration (rule-based)
+
+```go
+result, ok := gosympy.Integrate(expr, "x")
+```
+
+Supported patterns:
+- Constants: ∫c dx = cx
+- Power rule: ∫xⁿ dx = xⁿ⁺¹/(n+1)
+- Inverse: ∫x⁻¹ dx = ln|x|
+- Sum rule: ∫(f+g) dx = ∫f dx + ∫g dx
+- Constant multiple: ∫cf dx = c∫f dx
+- Basic trig: ∫sin(x) dx = -cos(x), ∫cos(x) dx = sin(x)
+- Exponential: ∫eˣ dx = eˣ
+
+### Numerical definite integration
+
+Uses 10-point Gaussian quadrature:
+
+```go
+result := gosympy.DefiniteIntegrate(expr, "x", 0.0, 1.0)
+```
+
+### Taylor Series
+
+```go
+// Taylor expansion of sin(x) around 0, up to order 5
+series := gosympy.TaylorSeries(gosympy.SinOf(x), "x", gosympy.N(0), 5)
+```
+
+---
+
+## Algebra
+
+### Expand
+
+Distributes multiplication over addition:
+
+```go
+expr := gosympy.MulOf(
+    gosympy.AddOf(x, gosympy.N(1)),
+    gosympy.AddOf(x, gosympy.N(2)),
 )
+expanded := gosympy.Expand(expr)  // x^2 + 3*x + 2
+```
+
+Also expands `(a+b)^n` for integer n ≤ 10.
+
+### Polynomial utilities
+
+```go
+// Degree of expr as polynomial in x
+deg := gosympy.Degree(expr, "x")
+
+// Extract coefficients by degree
+coeffs := gosympy.PolyCoeffs(expr, "x")
+// coeffs[2] = coefficient of x^2
+// coeffs[1] = coefficient of x
+// coeffs[0] = constant term
+```
+
+### Free symbols
+
+```go
+syms := gosympy.FreeSymbols(expr)
+// returns map[string]struct{}{} of symbol names
 ```
 
 ---
 
-### Exact Rational Arithmetic
+## Solvers
+
+### Linear: ax + b = 0
 
 ```go
-sympy.F(1, 3)   // 1/3
-sympy.F(5, 7)   // 5/7
+res := gosympy.SolveLinear(a, b)
+// res.Solutions[0] = exact rational solution
+// res.ExactForm = true if exact
+// res.Error = non-empty if no unique solution
 ```
 
-Backed by `math/big.Rat`.
+### Quadratic: ax² + bx + c = 0
 
-No float rounding unless explicitly requested.
+```go
+res := gosympy.SolveQuadratic(a, b, c)
+// Returns float64 roots; res.Error contains complex root info if discriminant < 0
+```
+
+### 2×2 Linear System
+
+```go
+// a1*x + b1*y = c1
+// a2*x + b2*y = c2
+xSol, ySol, err := gosympy.SolveLinearSystem2x2(a1, b1, c1, a2, b2, c2)
+```
 
 ---
 
-### Polynomial Utilities
-
-#### Degree
+## Equations
 
 ```go
-sympy.Degree(expr, "x")
+eq := gosympy.Eq(x, gosympy.N(5))
+fmt.Println(eq.String())           // x = 5
+fmt.Println(eq.LaTeX())            // x = 5
+fmt.Println(eq.Residual())         // x + -5 (expression = 0)
 ```
-
-#### Coefficient Extraction
-
-```go
-coeffs := sympy.PolyCoeffs(expr, "x")
-// map[degree]Rational
-```
-
-Enables:
-
-- AI reasoning over polynomials
-- Custom solvers
-- Lightweight CAS behaviors
 
 ---
 
-### Solvers
+## LaTeX Output
 
-#### Linear
-
-```go
-sympy.SolveLinear(a, b)  // solves ax + b = 0
-```
-
-Exact rational result.
-
-#### Quadratic
+All expressions support LaTeX rendering:
 
 ```go
-sympy.SolveQuadratic(a, b, c)
+gosympy.LaTeX(gosympy.F(1, 3))                       // \frac{1}{3}
+gosympy.LaTeX(gosympy.PowOf(x, gosympy.N(2)))        // x^{2}
+gosympy.LaTeX(gosympy.SinOf(x))                      // \sin\left(x\right)
 ```
-
-Float64 roots.
 
 ---
 
-### Integration (Rule-Based)
+## JSON Serialization
 
-Supports:
-
-- Power rule
-- Sum rule
-- Constant multiple rule
-- Polynomial integration
+Expressions serialize to/from a structured JSON tree — ideal for passing between services or AI tools.
 
 ```go
-sympy.Integrate(expr, "x")
+// Serialize
+json, err := gosympy.ToJSON(expr)
+// {"type":"add","terms":[{"type":"mul","factors":[{"type":"num","value":"2"},{"type":"sym","name":"x"}]},{"type":"num","value":"1"}]}
+
+// Deserialize
+var m map[string]interface{}
+json.Unmarshal([]byte(jsonStr), &m)
+expr, err := gosympy.FromJSON(m)
 ```
 
-Pattern-based only. No Risch algorithm.
+**Expression JSON format:**
+
+| Type | JSON |
+|------|------|
+| `Num` | `{"type":"num","value":"3/4"}` |
+| `Sym` | `{"type":"sym","name":"x"}` |
+| `Add` | `{"type":"add","terms":[...]}` |
+| `Mul` | `{"type":"mul","factors":[...]}` |
+| `Pow` | `{"type":"pow","base":{...},"exp":{...}}` |
+| `Func` | `{"type":"func","name":"sin","arg":{...}}` |
 
 ---
 
-## Public Helpers
+## AI Agent Integration
+
+### MCP Tool Interface
+
+`go-sympy` exposes a unified tool call interface compatible with AI agent frameworks including Model Context Protocol (MCP):
 
 ```go
-sympy.Simplify(expr)
-sympy.String(expr)
+req := gosympy.ToolRequest{
+    Tool: "diff",
+    Params: map[string]interface{}{
+        "expr": exprJSON,  // JSON expression tree
+        "var":  "x",
+    },
+}
+resp := gosympy.HandleToolCall(req)
+fmt.Println(resp.String) // human-readable result
+fmt.Println(resp.LaTeX)  // LaTeX result
+fmt.Println(resp.Error)  // error if failed
 ```
 
-Designed for AI pipelines where deterministic formatting matters.
+**Available tools:**
+
+| Tool | Description | Required params |
+|------|-------------|-----------------|
+| `simplify` | Simplify expression | `expr` |
+| `diff` | Differentiate | `expr`, `var` |
+| `integrate` | Integrate (symbolic) | `expr`, `var` |
+| `expand` | Algebraic expansion | `expr` |
+| `substitute` | Substitute variable | `expr`, `var`, `value` |
+| `to_latex` | Convert to LaTeX | `expr` |
+| `free_symbols` | List free variables | `expr` |
+| `degree` | Polynomial degree | `expr`, `var` |
+| `solve_linear` | Solve ax+b=0 | `a`, `b` |
+| `solve_quadratic` | Solve ax²+bx+c=0 | `a`, `b`, `c` |
+| `taylor` | Taylor series | `expr`, `var`, `around`?, `order`? |
+
+### Get the MCP Tool Schema
+
+```go
+schema := gosympy.MCPToolSpec()
+// Returns full JSON schema for all tools, suitable for registering
+// with any MCP-compatible agent framework.
+```
+
+### LLM System Prompt Recommendation
+
+When using go-sympy as an LLM tool backend, include this in your system prompt:
+
+```
+You have access to a symbolic math engine. Build expression trees as JSON and call tools:
+- Expressions are JSON objects with a "type" field.
+- Types: "num" (with "value"), "sym" (with "name"), "add" (with "terms":[]), 
+         "mul" (with "factors":[]), "pow" (with "base" and "exp"),
+         "func" (with "name" and "arg").
+- Available tools: simplify, diff, integrate, expand, substitute, solve_linear,
+                   solve_quadratic, to_latex, free_symbols, degree, taylor.
+- Always simplify results before presenting to the user.
+- Use to_latex to present math in rendered form.
+```
+
+---
+
+## Architecture
+
+```
+sympy.go
+├── Expr interface (Simplify, String, LaTeX, Sub, Diff, Eval, Equal)
+├── Core nodes
+│   ├── Num    — exact rational (math/big.Rat)
+│   ├── Sym    — symbolic variable
+│   ├── Add    — sum (flattens, combines like terms)
+│   ├── Mul    — product (flattens, collects numeric coefficient)
+│   ├── Pow    — base^exp (numeric evaluation for small integer exponents)
+│   └── Func   — sin, cos, tan, exp, ln, abs
+├── Calculus
+│   ├── Diff / Diff2 / DiffN
+│   ├── Integrate (rule-based symbolic)
+│   ├── DefiniteIntegrate (Gaussian quadrature)
+│   └── TaylorSeries
+├── Algebra
+│   ├── Expand (distributive expansion)
+│   ├── FreeSymbols
+│   ├── Degree
+│   └── PolyCoeffs
+├── Solvers
+│   ├── SolveLinear
+│   ├── SolveQuadratic
+│   └── SolveLinearSystem2x2
+├── Equation
+├── Serialization
+│   ├── ToJSON / FromJSON
+│   └── LaTeX
+└── AI/MCP Interface
+    ├── ToolRequest / ToolResponse
+    ├── HandleToolCall
+    └── MCPToolSpec
+```
 
 ---
 
 ## Limitations
 
-- No advanced polynomial factoring
-- No symbolic matrix algebra
-- No canonical simplification engine
-- No symbolic limits beyond substitution
-- No transcendental integration
-- No parser (AST is built programmatically)
+- No symbolic factoring (`factor(x^2-1)` → `(x-1)(x+1)`)
+- No symbolic limits (`limit(sin(x)/x, x, 0)`)
+- No matrix algebra
+- No Risch integration algorithm (transcendental integrals)
+- No expression parser (build ASTs programmatically or via JSON)
+- No pattern matching engine
+- No Gröbner bases
+- No complex number arithmetic
 
-This is a **minimal symbolic kernel**, not a full CAS.
-
----
-
-## Intended Use Cases
-
-- AI tool execution layer
-- LLM symbolic reasoning backend
-- Go-based math microservices
-- Deterministic algebra transforms
-- Educational symbolic engines
-- Lightweight research tools
-
----
-
-## Philosophy
-
-Small.
-Predictable.
-Deterministic.
-Embeddable.
-
-Not big.
-Not magical.
-Not opaque.
+This is a **minimal symbolic kernel**. See the [Future Directions](#future-directions) section for the roadmap.
 
 ---
 
 ## Future Directions
 
-- Differentiation
-- Expanded polynomial solving
-- Structured pattern matching
-- Optional parser layer
-- Symbolic equation solving
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+- [ ] Expression parser (`"2*x^2 + 3*x + 1"` → AST)
+- [ ] Symbolic factoring
+- [ ] `factor()`, `collect()`, `cancel()`, `apart()`
+- [ ] `limit()` using substitution and L'Hôpital
+- [ ] Symbolic matrix operations
+- [ ] `pprint()` ASCII pretty-printer
+- [ ] MCP server wrapper (standalone HTTP server)
+- [ ] WASM build target
+- [ ] Assumptions system (positive, integer, real, etc.)
+- [ ] Piecewise expressions
+- [ ] Trigonometric identities
+- [ ] Expand via `expand_trig`, `expand_log`
+- [ ] `Lambdify` → compiled Go function
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-Minimal symbolic math for Go.
-Built for humans and AI.
+## Philosophy
+
+> Small. Predictable. Deterministic. Embeddable.
+> Not big. Not magical. Not opaque.
+> Built for humans and AI agents alike.
